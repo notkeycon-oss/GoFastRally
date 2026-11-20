@@ -55,6 +55,8 @@
       this.fpsT = 0;
       requestAnimationFrame((t) => this.loop(t));
       this.bootDemo();
+      // cloud save: pull credits/upgrades from another device
+      if (G.NET.signedIn()) G.NET.pullProfile().then(() => { if (UI.current === 'menu') UI.renderMenu(); });
     },
 
     computeQuality() {
@@ -158,6 +160,7 @@
       s.ph.events.length = 0;
       s.model = new G.CarModel(s.spec, UI.livery(carId), { night: s.world.night });
       s.ph.bonnetLocal = s.model.bonnetLocal;
+      s.ph.eyeLocal = s.model.eyeLocal;
       this.scene.add(s.model.group);
       s.model.update(s.ph);
     },

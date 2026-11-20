@@ -178,6 +178,11 @@
       steerSens: 1,
     },
     car: 'vortex',
+    earned: 300,
+    spent: 0,
+    ups: {},
+    owned: { sprite: true, vortex: true },
+    account: null,
     liveries: {},
     bests: {}, // stageKey -> {t, splits:[], car}
     daily: {},
@@ -188,6 +193,12 @@
   });
   G.save = {
     data: null,
+    credits() {
+      return (this.data.earned | 0) - (this.data.spent | 0);
+    },
+    earn(n) {
+      this.data.earned = (this.data.earned | 0) + Math.round(n);
+    },
     load() {
       let d = null;
       try {

@@ -32,6 +32,7 @@
 
   class CarPhysics {
     constructor(spec, world, settings) {
+      if (!spec.tyre) spec = G.tunedSpec(spec, spec.ups);
       this.spec = spec;
       this.world = world;
       this.settings = settings || {};
@@ -168,9 +169,9 @@
       const n = this.spec.gears.length;
       if (dir > 0) {
         if (this.gear === -1) this.gear = 1;
-        else if (this.gear < n) { this.gear++; this.shiftT = 0.12; this.events.push({ type: 'shift' }); if (this.input.throttle < 0.2 || this.rpm > this.spec.redline * 0.85) this.events.push({ type: 'pop' }); }
+        else if (this.gear < n) { this.gear++; this.shiftT = this.spec.shiftTime || 0.12; this.events.push({ type: 'shift' }); if (this.input.throttle < 0.2 || this.rpm > this.spec.redline * 0.85) this.events.push({ type: 'pop' }); }
       } else {
-        if (this.gear > 1) { this.gear--; this.shiftT = 0.1; this.events.push({ type: 'shift' }); }
+        if (this.gear > 1) { this.gear--; this.shiftT = (this.spec.shiftTime || 0.12) * 0.85; this.events.push({ type: 'shift' }); }
         else if (this.gear === 1 && this.fwdSpeed < 2) this.gear = -1;
       }
     }
@@ -414,7 +415,7 @@
         const vp = this.pointVel(wh.cp, t[3]);
         const vLong = vp.dot(wf), vLat = vp.dot(wr);
         const sf2 = G.SURF[wh.surf] || G.SURF.gravel;
-        let mu = sf2.mu * S.grip * this.weatherGrip;
+        let mu = sf2.mu * S.grip * this.weatherGrip * (S.tyre[G.TYRE_GROUP[wh.surf] || 'gravel'] || 1);
         if (this.rainy) mu *= G.RAIN_GRIP[wh.surf] || 1;
         if (D.punct[wh.i]) mu *= 0.5;
         mu *= G.clamp(1 - 0.09 * (wh.Fz / Fz0 - 1), 0.72, 1.12);

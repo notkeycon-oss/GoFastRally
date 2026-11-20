@@ -2,7 +2,7 @@
 (function () {
   const G = window.G;
   const V3 = THREE.Vector3;
-  G.CAM_NAMES = ['CHASE', 'FAR CHASE', 'BONNET', 'BUMPER', 'HELICOPTER'];
+  G.CAM_NAMES = ['CHASE', 'FAR CHASE', 'COCKPIT', 'BONNET', 'BUMPER', 'HELICOPTER'];
 
   class CamRig {
     constructor(camera) {
@@ -45,7 +45,7 @@
         tyaw = carYaw + G.wrapAngle(vy - carYaw) * 0.35;
       }
       const dy = G.wrapAngle(tyaw - this.yaw);
-      this.yaw += dy * Math.min(1, dt * (this.mode === 4 ? 2.2 : 5.0));
+      this.yaw += dy * Math.min(1, dt * (this.mode === 5 ? 2.2 : 5.0));
       this.t += dt;
       const sp = ph.speed;
       let fov = 60 + Math.min(16, sp * 0.3);
@@ -70,9 +70,27 @@
         this.look.set(ph.pos.x + sx * 3, ph.pos.y + 0.75, ph.pos.z + sz * 3);
         cam.up.set(0, 1, 0);
         cam.lookAt(this.look);
-      } else if (m === 2 || m === 3) {
-        // cockpit-ish cameras locked to the car
-        const local = m === 2 ? (ph.bonnetLocal ? off.copy(ph.bonnetLocal) : off.set(0, 0.55, -0.9)) : off.set(0, -ph.spec.cgH + 0.55, -ph.L / 2 - 0.15);
+      } else if (m === 2) {
+        // first person: driver's eyes, head pushed around by g-forces
+        const e = ph.eyeLocal || off.set(-0.36, 0.7, 0.2);
+        const hs = this.head || (this.head = { x: 0, y: 0, z: 0 });
+        const latA = G.clamp((ph.w ? ph.w.y : 0) * ph.speed * 0.006, -0.06, 0.06);
+        const lonA = G.clamp(-(ph.fwdSpeed - (this._lastFwd == null ? ph.fwdSpeed : this._lastFwd)) / Math.max(dt, 1e-3) * 0.004, -0.05, 0.05);
+        this._lastFwd = ph.fwdSpeed;
+        hs.x = G.damp(hs.x, latA, 6, dt);
+        hs.z = G.damp(hs.z, lonA, 5, dt);
+        const vb = (ph.speed > 3 ? 0.004 : 0) * Math.sin(this.t * 41);
+        off.set(e.x + hs.x, e.y + vb, e.z + hs.z);
+        cam.position.copy(off).applyQuaternion(ph.q).add(ph.pos);
+        tmp.set(e.x + hs.x * 0.3, e.y - 1.2, e.z - 20).applyQuaternion(ph.q).add(ph.pos);
+        // the neck keeps the horizon a little steadier than the car
+        cam.up.set(0, 1, 0).applyQuaternion(ph.q).lerp(this._v[3].set(0, 1, 0), 0.35).normalize();
+        cam.lookAt(tmp);
+        fov = 74 + Math.min(6, sp * 0.12);
+        this._placed = false;
+      } else if (m === 3 || m === 4) {
+        // cameras locked to the car
+        const local = m === 3 ? (ph.bonnetLocal ? off.copy(ph.bonnetLocal) : off.set(0, 0.55, -0.9)) : off.set(0, -ph.spec.cgH + 0.55, -ph.L / 2 - 0.15);
         cam.position.copy(local).applyQuaternion(ph.q).add(ph.pos);
         tmp.set(0, 0, -20).add(local).applyQuaternion(ph.q).add(ph.pos);
         cam.up.set(0, 1, 0).applyQuaternion(ph.q);

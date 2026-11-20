@@ -72,6 +72,7 @@
     <h1 class="logo">GO FAST<br><span>RALLY</span></h1>
     <div class="sub">Realistic handling. Procedural mountain stages. Your co-driver calls every turn.</div>
     <div class="profile" id="profile"></div>
+    <div class="acct" id="acct"></div>
     <div class="mbtns">
       <button class="mb main" data-go="stages"><b>FEATURED STAGES</b><small>Nine hand-picked stages · earn stars</small></button>
       <button class="mb" data-go="custom"><b>QUICK STAGE</b><small>Build your own stage from a seed</small></button>
@@ -81,6 +82,7 @@
     </div>
     <div class="row">
       <button class="sec" data-go="garage">GARAGE</button>
+      <button class="sec" data-go="boards">LEADERBOARDS</button>
       <button class="sec" data-go="settings">SETTINGS</button>
       <button class="sec" data-go="help">HOW TO PLAY</button>
     </div>
@@ -136,14 +138,42 @@
   </div>
 </div>
 
+<!-- ================= SIGN IN ================= -->
+<div id="login" class="panel hidden">
+  <div class="card">
+    <h2>SIGN IN</h2>
+    <div class="sub">Pick a racer name and a 4-digit PIN. Use the same name and PIN on any device to get your credits, upgrades and times back. Your Riptide Run name and PIN work here too.</div>
+    <div class="col">
+      <input id="lname" maxlength="14" placeholder="Racer name" autocomplete="off" spellcheck="false">
+      <input id="lpin" maxlength="4" inputmode="numeric" placeholder="4-digit PIN" autocomplete="off" type="password">
+      <div id="lerr" class="err"></div>
+      <button class="go" id="lGo">SIGN IN</button>
+      <button class="sec" data-go="menu">PLAY OFFLINE</button>
+    </div>
+  </div>
+</div>
+
+<!-- ================= LEADERBOARDS ================= -->
+<div id="boards" class="panel hidden">
+  <div class="card wide">
+    <h2>LEADERBOARDS</h2>
+    <div class="sub" id="bSub">World times from every signed-in racer. Press 👻 to race someone's ghost.</div>
+    <div class="bgrid">
+      <div class="blist" id="bList"></div>
+      <div class="btable" id="bTable"></div>
+    </div>
+    <div class="row"><button class="sec" data-go="menu">BACK</button><button class="go" id="bPlay">DRIVE THIS STAGE</button></div>
+  </div>
+</div>
+
 <!-- ================= GARAGE ================= -->
 <div id="garage" class="panel hidden">
   <div class="card gcard">
-    <h2>GARAGE</h2>
-    <div id="carList" class="carlist"></div>
-    <div id="carInfo"></div>
-    <div class="ghead">LIVERY</div>
-    <div id="livery"></div>
+    <div class="ghd"><h2>GARAGE</h2><span class="pill cr" id="gCred"></span></div>
+    <div class="seg gtabs" id="gTabs"><button data-tab="cars" class="on">CARS</button><button data-tab="ups">UPGRADES</button><button data-tab="livery">LIVERY</button></div>
+    <div id="tabCars"><div id="carList" class="carlist"></div><div id="carInfo"></div></div>
+    <div id="tabUps" class="hidden"><div id="upInfo" class="sub"></div><div id="upList" class="uplist"></div></div>
+    <div id="tabLivery" class="hidden"><div id="livery"></div></div>
     <div class="gfoot"><button class="go" data-go="menu">DONE</button></div>
   </div>
 </div>
@@ -165,7 +195,8 @@
       <div><b>DRIVE</b><span>W / ↑ throttle · S / ↓ brake (hold when stopped to reverse) · A D / ← → steer</span></div>
       <div><b>HANDBRAKE</b><span>SPACE locks the rear wheels. Tap it to swing the car round hairpins.</span></div>
       <div><b>GEARS</b><span>Automatic by default. With manual set in Settings, use E to shift up and Q to shift down.</span></div>
-      <div><b>CAMERA &amp; RESET</b><span>C changes camera. R puts you back on the road (+5 s).</span></div>
+      <div><b>CAMERA &amp; RESET</b><span>C changes camera: chase, far, cockpit (first person), bonnet, bumper and helicopter. R puts you back on the road (+5 s).</span></div>
+      <div><b>UPGRADES</b><span>Finish stages to earn credits (CR). Spend them in the Garage on engine, turbo, gearbox, brakes, suspension, weight and tyres for each surface.</span></div>
       <div><b>PACE NOTES</b><span>Your co-driver calls each turn by grade: <b class="inl">6</b> is nearly flat out, <b class="inl">1</b> is the slowest, then the hairpin. "Tightens" means brake again mid-turn.</span></div>
       <div><b>DON'T CUT</b><span>A rock sits on the inside of that corner. Keep wide or you'll damage the car.</span></div>
       <div><b>CRESTS &amp; JUMPS</b><span>Lift off before big jumps and land straight. Landing sideways hurts.</span></div>
@@ -205,7 +236,7 @@
         <div id="resStats" class="stats"></div>
       </div>
       <div class="resR">
-        <div class="ghead">STAGE RESULTS</div>
+        <div class="ghd"><div class="ghead" id="resBoardTitle">STAGE RESULTS</div><div class="seg" id="resTabs"><button data-b="world" class="on">WORLD</button><button data-b="field">RALLY FIELD</button></div></div>
         <div id="resBoard"></div>
       </div>
     </div>
@@ -232,6 +263,7 @@
 <script src="js/camera.js"></script>
 <script src="js/ai.js"></script>
 <script src="js/hud.js"></script>
+<script src="js/net.js"></script>
 <script src="js/session.js"></script>
 <script src="js/ui.js"></script>
 <script src="js/main.js"></script>
