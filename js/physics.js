@@ -226,7 +226,22 @@
       const assist = this.settings.steerAssist !== false;
       const lock = ((S.steerLock * Math.PI) / 180) * (1 - 0.3 * D.steer * dm);
       let target;
-      if (assist) {
+      const arcadeMode = this.settings.handling !== 'sim';
+      if (arcadeMode) {
+        // Arcade: the stick asks for a turn rate; a controller (below) delivers it.
+        // Wheels still steer (for looks and tyre forces) with a speed-sensitive lock.
+        const fs = G.SURF[wheels[0].surf] || G.SURF.gravel;
+        const muA = fs.mu * S.grip * (S.tyre[G.TYRE_GROUP[wheels[0].surf] || 'gravel'] || 1) * this.weatherGrip;
+        const aMax = Math.min(muA * 1.35, 1.25) * GRAV;
+        const vv = Math.max(Math.abs(vF), 0.01);
+        const rKin = (vv * Math.tan(lock)) / S.wheelbase;
+        const rMax = Math.min(rKin, aMax / Math.max(vv, 2));
+        this.rMax = rMax;
+        this.rCmd = -inp.steer * rMax * (vF < -0.5 ? -1 : 1) * (inp.handbrake > 0.3 ? 1.5 : 1);
+        // wheel angle that matches the requested turn, so the front tyres follow the path
+        target = G.clamp(Math.atan((-this.rCmd * (vF < -0.5 ? -1 : 1) * S.wheelbase) / Math.max(Math.abs(vF), 2)) * 1.08, -lock, lock);
+        this.steerMax = lock;
+      } else if (assist) {
         // keep the front tyres at their best slip angle: full stick = the most grip you can use
         const fs = G.SURF[wheels[0].surf] || G.SURF.gravel;
         const arc = this.settings.handling !== 'sim';
@@ -236,7 +251,7 @@
         target = inp.steer * dmax;
         this.steerMax = dmax;
       } else target = inp.steer * lock * (1 / (1 + (v * v) / 2600));
-      if (assist && v > 4 && vF > 0) {
+      if (assist && !arcadeMode && v > 4 && vF > 0) {
         const vr = this.vel.dot(right);
         const slipAng = Math.atan2(vr, Math.max(vF, 1));
         // only help catch real slides (beyond normal cornering slip)
@@ -302,7 +317,9 @@
       if (this.limiter) Te = 0;
       if (!slipping) Te -= (1 - thr) * (6 + 0.05 * S.torque[3][1] * (rpm / red));
       // traction control
-      if (this.settings.tc && thr > 0.1) {
+      // Arcade: turning hard scrubs some power so holding W mid-corner doesn't push you wide
+      if (arcadeMode) Te *= 1 - 0.55 * Math.abs(inp.steer) * G.smoothstep(8, 26, v);
+      if ((this.settings.tc || arcadeMode) && thr > 0.1) {
         let spin = 0;
         for (const wh of wheels) if (wh.drive && wh.contact) spin = Math.max(spin, wh.slipLong);
         if (spin > 0.22) Te *= G.clamp(1 - (spin - 0.22) * 3, 0.25, 1);
@@ -465,17 +482,21 @@
         if (arcade) {
           // Arcade grip: stiff and predictable right up to the limit, then a steady slide
           // (no sudden let-go). Wheelspin/braking uses a little of the sideways grip.
-          let cap = mu * 1.15 * wh.Fz;
+          let cap = Math.min(mu * 1.35, 1.3) * wh.Fz;
           if (!wh.front && inp.handbrake > 0.3) cap *= 0.42;
           const use = Math.min(1, Math.abs(Fx) / Math.max(cap, 1));
-          cap *= Math.sqrt(Math.max(0.3, 1 - use * use * 0.7));
+          cap *= Math.sqrt(Math.max(0.75, 1 - use * use * 0.35));
           Fy = G.clamp((-vLat * cap) / 0.75, -cap, cap);
           wh.slipLat = vLat / Math.max(Math.abs(vLong), 1);
           wh.slip = Math.hypot(wh.slipLong / kp, Math.abs(vLat) / 1.4);
         }
         const rr = -sf2.rr * wh.Fz * Math.tanh(vLong / 0.6);
         const Ft = t[4].copy(wf).multiplyScalar(Fx + rr).addScaledVector(wr, Fy);
-        this.addForceAt(Ft, wh.cp);
+        if (this.settings.handling !== 'sim') {
+          // arcade: side forces act higher up (closer to the centre of mass), so the car leans but doesn't tip
+          this.addForceAt(t[4].copy(wf).multiplyScalar(Fx + rr), wh.cp);
+          this.addForceAt(t[5].copy(wr).multiplyScalar(Fy), t[6].copy(wh.cp).addScaledVector(up, 0.32));
+        } else this.addForceAt(Ft, wh.cp);
       }
       // wheel visual rotation
       for (const wh of wheels) wh.rot += wh.w * dt;
@@ -510,8 +531,19 @@
       // ----- obstacles (trees, rocks, rails) -----
       this._obstacles(dt);
 
-      // ----- stability control (part of steering assist): stops the car over-rotating -----
-      if (assist && v > 5 && this.airT === 0 && vF > 2) {
+      // ----- Arcade turn-rate controller: you always get the turn you ask for (within grip) -----
+      if (arcadeMode && grounded >= 2) {
+        const r = this.w.dot(up);
+        const k = inp.handbrake > 0.3 ? 3 : 9;
+        this.T.addScaledVector(up, G.clamp((this.rCmd - r) * k, -14, 14) * this.I.y);
+        // tyre scrub: hard cornering bleeds speed, so a held turn stays tight
+        if (v > 3) {
+          const aLat = Math.abs(r * vF);
+          this.F.addScaledVector(this.vel, (-this.m * aLat * 0.3 * Math.abs(inp.steer)) / v);
+        }
+      }
+      // ----- stability control (part of steering assist, sim mode): stops the car over-rotating -----
+      if (!arcadeMode && assist && v > 5 && this.airT === 0 && vF > 2) {
         const r = this.w.dot(up);
         let rd = (-vF * Math.tan(this.steerAngle)) / S.wheelbase;
         const rmax = (11 / Math.max(v, 1));
