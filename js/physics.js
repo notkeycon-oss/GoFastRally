@@ -225,8 +225,16 @@
       const v = this.speed;
       const assist = this.settings.steerAssist !== false;
       const lock = ((S.steerLock * Math.PI) / 180) * (1 - 0.3 * D.steer * dm);
-      const sf = assist ? 1 / (1 + (v * v) / 1100) : 1 / (1 + (v * v) / 2600);
-      let target = inp.steer * lock * sf;
+      let target;
+      if (assist) {
+        // keep the front tyres at their best slip angle: full stick = the most grip you can use
+        const fs = G.SURF[wheels[0].surf] || G.SURF.gravel;
+        const muF = fs.mu * S.grip * (S.tyre[G.TYRE_GROUP[wheels[0].surf] || 'gravel'] || 1) * this.weatherGrip;
+        const kin = Math.atan((S.wheelbase * muF * GRAV * 0.95) / Math.max(v * v, 1));
+        const dmax = G.clamp(kin + fs.ap * 0.85, lock * 0.2, lock);
+        target = inp.steer * dmax;
+        this.steerMax = dmax;
+      } else target = inp.steer * lock * (1 / (1 + (v * v) / 2600));
       if (assist && v > 4 && vF > 0) {
         const vr = this.vel.dot(right);
         const slipAng = Math.atan2(vr, Math.max(vF, 1));
@@ -291,7 +299,7 @@
       if (S.turbo > 0) Te *= 0.5 + 0.5 * this.boost;
       Te *= 1 - 0.6 * D.engine * dm;
       if (this.limiter) Te = 0;
-      if (!slipping) Te -= (1 - thr) * (12 + 0.11 * S.torque[3][1] * (rpm / red));
+      if (!slipping) Te -= (1 - thr) * (6 + 0.05 * S.torque[3][1] * (rpm / red));
       // traction control
       if (this.settings.tc && thr > 0.1) {
         let spin = 0;
@@ -418,6 +426,7 @@
         let mu = sf2.mu * S.grip * this.weatherGrip * (S.tyre[G.TYRE_GROUP[wh.surf] || 'gravel'] || 1);
         if (this.rainy) mu *= G.RAIN_GRIP[wh.surf] || 1;
         if (D.punct[wh.i]) mu *= 0.5;
+        if (!wh.front) mu *= 1.06; // a touch more rear grip keeps the car stable, like a road-tuned rally car
         mu *= G.clamp(1 - 0.09 * (wh.Fz / Fz0 - 1), 0.72, 1.12);
         const den = Math.max(Math.abs(vLong), 3.5);
         const sy = vLat / den / Math.tan(sf2.ap);
@@ -485,6 +494,18 @@
 
       // ----- obstacles (trees, rocks, rails) -----
       this._obstacles(dt);
+
+      // ----- stability control (part of steering assist): stops the car over-rotating -----
+      if (assist && v > 5 && this.airT === 0 && vF > 2) {
+        const r = this.w.dot(up);
+        let rd = (-vF * Math.tan(this.steerAngle)) / S.wheelbase;
+        const rmax = (11 / Math.max(v, 1));
+        rd = G.clamp(rd, -rmax, rmax);
+        const e = r - rd;
+        if (Math.abs(r) > Math.abs(rd) + 0.08 && Math.sign(e) === Math.sign(r)) {
+          this.T.addScaledVector(up, -G.clamp(e, -1.5, 1.5) * this.I.y * 2.2 * (1 - inp.handbrake * 0.85));
+        }
+      }
 
       // ----- aero -----
       const vl = this.speed;

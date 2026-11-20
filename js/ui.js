@@ -666,7 +666,7 @@
       const live = () => this.app.applySettings(true);
       grp('DRIVING');
       box.appendChild(this.seg('Gearbox', 'transmission', S, [['auto', 'AUTO'], ['manual', 'MANUAL (E / Q)']], live));
-      box.appendChild(this.seg('Steering assist', 'steerAssist', S, [[true, 'ON'], [false, 'OFF']], live, 'Less lock at speed and help catching slides'));
+      box.appendChild(this.seg('Steering assist', 'steerAssist', S, [[true, 'ON'], [false, 'OFF']], live, 'Keeps the front tyres at their grip limit and stops spins'));
       box.appendChild(this.slider('Steering speed', 'steerSens', S, 0.6, 1.6, 0.1, live, (v) => v.toFixed(1) + '×'));
       box.appendChild(this.seg('ABS', 'abs', S, [[true, 'ON'], [false, 'OFF']], live));
       box.appendChild(this.seg('Traction control', 'tc', S, [[true, 'ON'], [false, 'OFF']], live));
