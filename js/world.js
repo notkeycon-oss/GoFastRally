@@ -52,8 +52,10 @@
 
     // ---------- setup ----------
     initMaterials() {
-      this.terrainMat = new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide });
-      const roadOpts = { vertexColors: true, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -4 };
+      const gk = this.theme.snowbanks ? 'snow' : this.themeKey === 'canyon' ? 'sand' : 'grass';
+      this.terrainMat = new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide, map: G.geo.groundTexture(gk) });
+      const rk = this.track.surface === 'tarmac' ? 'tarmac' : this.track.surface === 'snow' ? 'snow' : 'gravel';
+      const roadOpts = { vertexColors: true, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -4, map: G.geo.roadTexture(rk) };
       this.roadMat = this.wet || this.track.surface === 'ice'
         ? new THREE.MeshPhongMaterial(Object.assign({ shininess: 70, specular: new THREE.Color(this.wet ? 0x3a3f46 : 0x222222) }, roadOpts))
         : new THREE.MeshLambertMaterial(roadOpts);
@@ -108,12 +110,20 @@
           top: { value: top }, hor: { value: hor }, bot: { value: bot },
           sunDir: { value: this.sunDir.clone() }, sunCol: { value: new THREE.Color(T.sun) },
           sunAmt: { value: this.weatherKey === 'clear' ? (this.night ? 0.4 : 1.0) : 0.15 },
+          cloudAmt: { value: this.weatherKey === 'clear' ? 0.85 : 0.5 },
+          cloudCol: { value: this.night ? new THREE.Color(0x2a3550) : T.name === 'Sunset' ? new THREE.Color(0xffd2b8) : new THREE.Color(0xffffff) },
+          time: { value: 0 },
         },
         vertexShader: 'varying vec3 vD; void main(){ vD = normalize(position); vec4 p = projectionMatrix * modelViewMatrix * vec4(position,1.0); gl_Position = p.xyww; }',
         fragmentShader:
-          'uniform vec3 top,hor,bot,sunCol,sunDir; uniform float sunAmt; varying vec3 vD;' +
-          'void main(){ float h=vD.y; vec3 c=mix(hor,top,smoothstep(0.0,0.5,h)); c=mix(c,bot,smoothstep(0.0,-0.25,h));' +
-          'float sd=max(dot(normalize(vD),sunDir),0.0); c+=sunCol*(pow(sd,900.0)*3.0+pow(sd,12.0)*0.22+pow(sd,3.0)*0.06)*sunAmt;' +
+          'uniform vec3 top,hor,bot,sunCol,sunDir,cloudCol; uniform float sunAmt,cloudAmt,time; varying vec3 vD;' +
+          'float hsh(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}' +
+          'float vn(vec2 p){vec2 i=floor(p),f=fract(p);f=f*f*(3.0-2.0*f);return mix(mix(hsh(i),hsh(i+vec2(1,0)),f.x),mix(hsh(i+vec2(0,1)),hsh(i+vec2(1,1)),f.x),f.y);}' +
+          'float fbm(vec2 p){float s=0.0,a=0.5;for(int k=0;k<5;k++){s+=a*vn(p);p*=2.03;a*=0.5;}return s;}' +
+          'void main(){ vec3 d=normalize(vD); float h=d.y; vec3 c=mix(hor,top,smoothstep(0.0,0.5,h)); c=mix(c,bot,smoothstep(0.0,-0.25,h));' +
+          'float sd=max(dot(d,sunDir),0.0); c+=sunCol*(pow(sd,900.0)*3.0+pow(sd,12.0)*0.22+pow(sd,3.0)*0.06)*sunAmt;' +
+          'if(h>0.0){ vec2 uv=d.xz/(h+0.12)*1.6+vec2(time*0.004,time*0.0015); float n=fbm(uv); float cl=smoothstep(0.5,0.78,n)*cloudAmt*smoothstep(0.0,0.18,h);' +
+          ' vec3 cc=mix(cloudCol*0.82,cloudCol,smoothstep(0.5,0.9,n))+sunCol*pow(sd,6.0)*0.25*cloudAmt; c=mix(c,cc,cl); }' +
           'gl_FragColor=vec4(c,1.0);}',
         side: THREE.BackSide,
         depthWrite: false,
@@ -162,6 +172,15 @@
         m.receiveShadow = false;
         this.root.add(m);
         this.inst[t] = m;
+      }
+      // grass tufts along the road edges
+      if (!this.theme.snowbanks) {
+        const gm = new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide });
+        this.grassMesh = new THREE.InstancedMesh(G.geo.grassTuft(), gm, 9000);
+        this.grassMesh.count = 0;
+        this.grassMesh.frustumCulled = false;
+        this.root.add(this.grassMesh);
+        this.grassCol = new THREE.Color(this.themeKey === 'canyon' ? '#b39a5c' : this.themeKey === 'coast' ? '#7f9c46' : '#5e8f38');
       }
       const P = G.geo.person();
       this.peopleBody = new THREE.InstancedMesh(P.body, this.propMat, 900);
@@ -401,9 +420,11 @@
       if (this._instFocus && Math.hypot(this._instFocus.x - fx, this._instFocus.z - fz) > 70) this.instDirty = true;
       if (this.instDirty) this._rebuildInstances(fx, fz);
       if (this.peopleDirty) this._rebuildPeople();
+      if (this.grassDirty) this._rebuildGrass();
       this._animatePeople(dt, carPos || this.focus);
       this._weather(dt, camera);
       this.sky.position.copy(camera.position);
+      this.sky.material.uniforms.time.value = this.elapsed;
       if (this.stars) this.stars.position.copy(camera.position);
       if (this.sea) this.sea.position.set(camera.position.x, 0, camera.position.z);
       const c = carPos || this.focus;
@@ -424,6 +445,7 @@
           else {
             this._rebuildInstances(fx, fz);
             this._rebuildPeople();
+            this._rebuildGrass();
             resolve();
           }
         };
@@ -556,13 +578,14 @@
         job.pos = new Float32Array(tris * 9);
         job.col = new Float32Array(tris * 9);
         job.nrm = new Float32Array(tris * 9);
+        job.uv = new Float32Array(tris * 6);
         job.o = 0;
         job.trow = 0;
         job.phase = 2;
       }
       const cs = GS * step;
       const x0 = ix0 * GS, z0 = iz0 * GS;
-      const pos = job.pos, col = job.col, nrm = job.nrm;
+      const pos = job.pos, col = job.col, nrm = job.nrm, uvA = job.uv;
       const c = this._tc || (this._tc = new THREE.Color());
       const put = (ax, ay, az, bx, by, bz, cx2, cy2, cz2, dist) => {
         const o = job.o;
@@ -577,6 +600,8 @@
         for (let k = 0; k < 3; k++) {
           col[o + k * 3] = c.r; col[o + k * 3 + 1] = c.g; col[o + k * 3 + 2] = c.b;
           nrm[o + k * 3] = nx; nrm[o + k * 3 + 1] = ny; nrm[o + k * 3 + 2] = nz;
+          uvA[(o / 3 + k) * 2] = pos[o + k * 3] / 5;
+          uvA[(o / 3 + k) * 2 + 1] = pos[o + k * 3 + 2] / 5;
         }
         job.o += 9;
       };
@@ -619,6 +644,7 @@
       g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
       g.setAttribute('normal', new THREE.BufferAttribute(nrm, 3));
       g.setAttribute('color', new THREE.BufferAttribute(col, 3));
+      g.setAttribute('uv', new THREE.BufferAttribute(uvA, 2));
       g.computeBoundingSphere();
       const mesh = new THREE.Mesh(g, this.terrainMat);
       mesh.receiveShadow = !!(this.q.shadows && job.lod === 0);
@@ -766,6 +792,7 @@
       const nl = L.length;
       const rows = i1 - i0 + 1;
       const pos = new Float32Array(rows * nl * 3);
+      const uvR = new Float32Array(rows * nl * 2);
       const col = new Float32Array(rows * nl * 3);
       const c = new THREE.Color();
       const ice = new THREE.Color(0xbfd9ea);
@@ -786,6 +813,8 @@
           col[o] = c.r;
           col[o + 1] = c.g;
           col[o + 2] = c.b;
+          uvR[(r * nl + j) * 2] = (L[j] + 1.24) / 2.48;
+          uvR[(r * nl + j) * 2 + 1] = (i * tr.DS) / 9;
         }
       }
       const idx = [];
@@ -797,6 +826,7 @@
       const g = new THREE.BufferGeometry();
       g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
       g.setAttribute('color', new THREE.BufferAttribute(col, 3));
+      g.setAttribute('uv', new THREE.BufferAttribute(uvR, 2));
       g.setIndex(idx);
       g.computeVertexNormals();
       g.computeBoundingSphere();
@@ -974,6 +1004,37 @@
         }
       }
       if (sec.people.length) this.peopleDirty = true;
+      // grass tufts on the verges
+      if (this.grassMesh) {
+        const r = G.rng(i0 * 7 + 1);
+        const mats = [], cols = [];
+        const m4 = new THREE.Matrix4(), q4 = new THREE.Quaternion(), v4 = new THREE.Vector3(), s4 = new THREE.Vector3();
+        const up = new THREE.Vector3(0, 1, 0);
+        const dens = this.themeKey === 'canyon' ? 0.35 : 1;
+        const gq = {};
+        for (let i = i0; i < i1; i++) {
+          for (const side of [-1, 1]) {
+            if (r() > dens * this.q.treeDensity) continue;
+            const n = 1 + Math.floor(r() * 2.5);
+            for (let k = 0; k < n; k++) {
+              const d = side * (tr.hw[i] * 1.24 + 0.15 + Math.pow(r(), 1.6) * 6);
+              const p = at(i * tr.DS + r() * tr.DS, d);
+              this.groundAt(p.x, p.z, gq);
+              if (gq.road > 0 || gq.ny < 0.8 || gq.water) continue;
+              const sc = 0.7 + r() * 0.8;
+              q4.setFromAxisAngle(up, r() * 6.28);
+              v4.set(p.x, gq.y - 0.03, p.z);
+              s4.set(sc, sc * (0.8 + r() * 0.6), sc);
+              m4.compose(v4, q4, s4);
+              mats.push(...m4.elements);
+              const j = 0.8 + r() * 0.35;
+              cols.push(this.grassCol.r * j, this.grassCol.g * j, this.grassCol.b * j);
+            }
+          }
+        }
+        sec.grass = { m: new Float32Array(mats), c: new Float32Array(cols) };
+        this.grassDirty = true;
+      }
       if (parts.length) {
         const g = G.geo.merge(parts);
         const m = new THREE.Mesh(g, this.propMat);
@@ -1010,8 +1071,29 @@
         }
       }
       if (s.people.length) this.peopleDirty = true;
+      if (s.grass) this.grassDirty = true;
       this._removeCols(s.cols);
       this.sections.delete(k);
+    }
+
+    _rebuildGrass() {
+      this.grassDirty = false;
+      const gm = this.grassMesh;
+      if (!gm) return;
+      const cap = gm.instanceMatrix.count;
+      let n = 0;
+      if (!gm.instanceColor) gm.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(cap * 3), 3);
+      for (const sec of this.sections.values()) {
+        if (!sec.grass) continue;
+        const k = Math.min(sec.grass.m.length / 16, cap - n);
+        if (k <= 0) break;
+        gm.instanceMatrix.array.set(sec.grass.m.subarray(0, k * 16), n * 16);
+        gm.instanceColor.array.set(sec.grass.c.subarray(0, k * 3), n * 3);
+        n += k;
+      }
+      gm.count = n;
+      gm.instanceMatrix.needsUpdate = true;
+      gm.instanceColor.needsUpdate = true;
     }
 
     _rebuildPeople() {

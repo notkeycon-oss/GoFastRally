@@ -7,14 +7,14 @@
   // tail: fraction of peak grip left when sliding fully, rr: rolling resistance coefficient,
   // dust: how much dust the surface throws, loose: loose (gravel-like) surface.
   G.SURF = {
-    tarmac: { name: 'Tarmac', mu: 1.06, kp: 0.09, ap: 0.13, tail: 0.74, rr: 0.013, dust: 0.05, loose: 0, rough: 0.002, skid: [0.06, 0.06, 0.06, 0.55] },
-    gravel: { name: 'Gravel', mu: 0.82, kp: 0.16, ap: 0.2, tail: 0.88, rr: 0.024, dust: 1, loose: 1, rough: 0.012, skid: [0.28, 0.22, 0.16, 0.45] },
-    dirt: { name: 'Dirt', mu: 0.79, kp: 0.17, ap: 0.21, tail: 0.89, rr: 0.027, dust: 1.25, loose: 1, rough: 0.014, skid: [0.33, 0.16, 0.1, 0.45] },
-    snow: { name: 'Snow', mu: 0.5, kp: 0.2, ap: 0.24, tail: 0.92, rr: 0.03, dust: 0.9, loose: 1, rough: 0.008, skid: [0.72, 0.76, 0.82, 0.5] },
-    ice: { name: 'Ice', mu: 0.26, kp: 0.12, ap: 0.16, tail: 0.85, rr: 0.012, dust: 0.1, loose: 0, rough: 0.002, skid: [0.8, 0.86, 0.92, 0.35] },
-    grass: { name: 'Grass', mu: 0.64, kp: 0.18, ap: 0.23, tail: 0.85, rr: 0.05, dust: 0.35, loose: 1, rough: 0.025, skid: [0.2, 0.25, 0.1, 0.4] },
-    sand: { name: 'Sand', mu: 0.62, kp: 0.24, ap: 0.28, tail: 0.92, rr: 0.085, dust: 1.6, loose: 1, rough: 0.02, skid: [0.5, 0.3, 0.18, 0.45] },
-    snowdeep: { name: 'Deep snow', mu: 0.4, kp: 0.25, ap: 0.3, tail: 0.92, rr: 0.11, dust: 1.4, loose: 1, rough: 0.015, skid: [0.8, 0.84, 0.9, 0.45] },
+    tarmac: { name: 'Tarmac', mu: 1.22, kp: 0.09, ap: 0.12, tail: 0.8, rr: 0.011, dust: 0.05, loose: 0, rough: 0.002, skid: [0.06, 0.06, 0.06, 0.55] },
+    gravel: { name: 'Gravel', mu: 0.96, kp: 0.15, ap: 0.16, tail: 0.92, rr: 0.016, dust: 1, loose: 1, rough: 0.012, skid: [0.28, 0.22, 0.16, 0.45] },
+    dirt: { name: 'Dirt', mu: 0.93, kp: 0.16, ap: 0.17, tail: 0.92, rr: 0.018, dust: 1.25, loose: 1, rough: 0.014, skid: [0.33, 0.16, 0.1, 0.45] },
+    snow: { name: 'Snow', mu: 0.66, kp: 0.18, ap: 0.2, tail: 0.94, rr: 0.022, dust: 0.9, loose: 1, rough: 0.008, skid: [0.72, 0.76, 0.82, 0.5] },
+    ice: { name: 'Ice', mu: 0.36, kp: 0.12, ap: 0.15, tail: 0.9, rr: 0.012, dust: 0.1, loose: 0, rough: 0.002, skid: [0.8, 0.86, 0.92, 0.35] },
+    grass: { name: 'Grass', mu: 0.74, kp: 0.17, ap: 0.2, tail: 0.88, rr: 0.04, dust: 0.35, loose: 1, rough: 0.025, skid: [0.2, 0.25, 0.1, 0.4] },
+    sand: { name: 'Sand', mu: 0.72, kp: 0.22, ap: 0.24, tail: 0.92, rr: 0.07, dust: 1.6, loose: 1, rough: 0.02, skid: [0.5, 0.3, 0.18, 0.45] },
+    snowdeep: { name: 'Deep snow', mu: 0.52, kp: 0.22, ap: 0.26, tail: 0.92, rr: 0.09, dust: 1.4, loose: 1, rough: 0.015, skid: [0.8, 0.84, 0.9, 0.45] },
     rock: { name: 'Rock', mu: 0.8, kp: 0.12, ap: 0.17, tail: 0.8, rr: 0.03, dust: 0.3, loose: 0, rough: 0.03, skid: [0.2, 0.2, 0.2, 0.4] },
   };
   // Grip multipliers when it rains.
