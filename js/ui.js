@@ -81,7 +81,15 @@
       // event
       $('evBack').onclick = () => {
         if (this.ev && this.ev.idx > 0 && this.ev.idx < this.ev.stages.length) {
-          if (!confirm('Leave the rally event? Your progress in it is lost.')) return;
+          // two taps to leave: browsers in some hosts block confirm() dialogs
+          if (!this._leaveArmed) {
+            this._leaveArmed = true;
+            $('evBack').textContent = 'TAP AGAIN TO QUIT EVENT';
+            setTimeout(() => { this._leaveArmed = false; $('evBack').textContent = 'BACK'; }, 3000);
+            return;
+          }
+          this._leaveArmed = false;
+          $('evBack').textContent = 'BACK';
         }
         this.ev = null;
         this.open('menu');
