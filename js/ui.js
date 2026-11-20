@@ -2,7 +2,8 @@
 (function () {
   const G = window.G;
   const $ = (id) => document.getElementById(id);
-  const PANELS = ['loading', 'menu', 'stages', 'custom', 'event', 'garage', 'settings', 'help', 'pause', 'results'];
+  const PANELS = ['loading', 'menu', 'stages', 'custom', 'event', 'garage', 'settings', 'help', 'pause', 'results', 'login', 'boards'];
+  const esc = (t) => String(t == null ? '' : t).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const THEME_BG = { forest: 'linear-gradient(135deg,#2f6b34,#8aa86a)', canyon: 'linear-gradient(135deg,#a2502a,#e3a15f)', alpine: 'linear-gradient(135deg,#7a95b8,#eef3f8)', coast: 'linear-gradient(135deg,#1f5f86,#7cae5a)' };
   const TIME_ICON = { morning: '🌅', noon: '☀️', sunset: '🌇', night: '🌙' };
   const WEATHER_ICON = { clear: '', fog: '🌫️', rain: '🌧️', snow: '❄️' };
@@ -62,6 +63,27 @@
           this.renderCustom();
         } else $('codeIn').style.borderColor = '#ff4d4f';
       };
+      // sign in
+      const doLogin = async () => {
+        $('lerr').textContent = 'Signing in…';
+        $('lGo').disabled = true;
+        try {
+          await G.NET.signIn($('lname').value, $('lpin').value);
+          $('lerr').textContent = '';
+          G.audio.chime();
+          this.open('menu');
+          this.app.refreshDemoCar();
+        } catch (e) {
+          $('lerr').textContent = e.message;
+        }
+        $('lGo').disabled = false;
+      };
+      $('lGo').onclick = doLogin;
+      $('lpin').addEventListener('keydown', (e) => { if (e.key === 'Enter') doLogin(); });
+      // garage tabs
+      $('gTabs').querySelectorAll('button').forEach((b) => (b.onclick = () => { this.gTab = b.getAttribute('data-tab'); G.audio.click(); this.renderGarage(); }));
+      $('resTabs').querySelectorAll('button').forEach((b) => (b.onclick = () => { this.resTab = b.getAttribute('data-b'); this.renderResBoard(); }));
+      $('bPlay').onclick = () => this.playBoardStage();
       $('setDone').onclick = () => {
         G.save.write();
         this.app.applySettings();
@@ -132,6 +154,12 @@
       if (id === 'custom') this.renderCustom();
       if (id === 'event') this.renderEventSetup();
       if (id === 'garage') this.renderGarage();
+      if (id === 'boards') this.renderBoards();
+      if (id === 'login') {
+        $('lname').value = G.NET.me() ? G.NET.me().name : '';
+        $('lpin').value = '';
+        $('lerr').textContent = '';
+      }
       if (id === 'settings') this.renderSettings();
       if (id !== 'settings' && id !== 'help') this.backTo = id === 'pause' ? 'pause' : 'menu';
       this.show(id);
@@ -167,7 +195,7 @@
       return { theme: f.theme, seed: f.seed, km: f.km, diff: f.diff, time: f.time, weather: f.weather, name: f.name };
     },
     carUnlocked(c) {
-      return this.stars() >= c.unlock;
+      return this.stars() >= c.unlock || !!(G.save.data.owned || {})[c.id];
     },
     livery(id) {
       const c = G.carById(id);
@@ -239,7 +267,14 @@
     renderMenu() {
       const S = G.save.data;
       const stars = this.stars();
-      $('profile').innerHTML = `<span class="pill">★ <b>${stars}</b> / ${G.FEATURED.length * 3}</span><span class="pill"><b>${S.stats.km.toFixed(1)}</b> KM DRIVEN</span><span class="pill"><b>${S.stats.stages}</b> STAGES</span>`;
+      const me = G.NET.me();
+      const status = G.NET.status === 'norules' ? ' · leaderboards not set up yet' : '';
+      $('acct').innerHTML = me
+        ? `<span class="pill">👤 <b>${esc(me.name)}</b>${status}</span><button class="sec" id="mOut">SIGN OUT</button>`
+        : `<button class="sec" id="mIn">SIGN IN</button><span style="color:var(--dim);font-size:15px">for world leaderboards and cloud saves</span>`;
+      if ($('mOut')) $('mOut').onclick = () => { G.NET.signOut(); this.renderMenu(); };
+      if ($('mIn')) $('mIn').onclick = () => this.open('login');
+      $('profile').innerHTML = `<span class="pill cr"><b>${G.save.credits().toLocaleString()}</b> CR</span><span class="pill">★ <b>${stars}</b> / ${G.FEATURED.length * 3}</span><span class="pill"><b>${S.stats.km.toFixed(1)}</b> KM DRIVEN</span><span class="pill"><b>${S.stats.stages}</b> STAGES</span>`;
       const d = this.dailyStage();
       const db = S.bests[this.trackKey(d)];
       $('dailySub').textContent = `${G.THEMES[d.theme].name} · ${d.km} km · ${db ? 'your best ' + G.fmtTime(db.t) : 'not driven yet'}`;
@@ -260,7 +295,7 @@
         el.innerHTML = `<span class="tag">${G.THEMES[f.theme].name.toUpperCase()}</span><div class="nm">${f.name}</div>
           <div class="ds">${f.km} km · ${G.DIFFICULTY[f.diff].name} · ${TIME_ICON[f.time]} ${WEATHER_ICON[f.weather]}</div>
           <div class="stars">${stars}</div>
-          <div class="tm">${b ? 'Best <b>' + G.fmtTime(b.t) + '</b>' : 'Not driven yet'}</div>`;
+          <div class="tm">${b ? 'Best <b>' + G.fmtTime(b.t) + '</b>' : 'Not driven yet'}</div><div class="wr" data-wr="${this.trackKey(st)}"></div>`;
         el.onclick = () => {
           this.sel.featured = f.id;
           G.audio.click();
@@ -270,6 +305,16 @@
         grid.appendChild(el);
       }
       this.carline('carline1');
+      this.fillWR();
+    },
+    // world record line on each featured card
+    async fillWR() {
+      for (const el of document.querySelectorAll('[data-wr]')) {
+        const k = el.getAttribute('data-wr');
+        G.NET.board(k)
+          .then((rows) => { el.textContent = rows.length ? `WR ${G.fmtTime(rows[0].t)} · ${rows[0].n}` : 'WR · be the first'; })
+          .catch(() => { el.textContent = ''; });
+      }
     },
     startFeatured(id) {
       const f = G.FEATURED.find((x) => x.id === id);
@@ -384,6 +429,14 @@
       ev.damage = r.damage;
       ev.results.push(r.time);
       ev.idx++;
+      if (ev.idx >= ev.stages.length) {
+        const pos = this.eventStandings().findIndex((x) => x.me) + 1;
+        const bonus = [0, 1500, 1000, 700, 500, 350, 250][pos] || 150;
+        G.save.earn(bonus);
+        G.save.write();
+        G.NET.pushProfile();
+        ev.bonus = bonus;
+      }
       this.app.quitToMenu(() => {
         this.renderEventStandings();
         this.show('event');
@@ -404,7 +457,7 @@
       const rows = this.eventStandings();
       const pos = rows.findIndex((r) => r.me) + 1;
       $('evTitle').textContent = done ? (pos === 1 ? 'RALLY WON!' : 'RALLY COMPLETE') : 'AFTER SS' + ev.idx;
-      $('evSub').textContent = done ? `You finished P${pos} of ${rows.length}.` : `You are P${pos} of ${rows.length}. Next: ${ev.stages[ev.idx].name} (${ev.stages[ev.idx].km} km).`;
+      $('evSub').textContent = done ? `You finished P${pos} of ${rows.length}. Prize: +${(ev.bonus || 0).toLocaleString()} CR.` : `You are P${pos} of ${rows.length}. Next: ${ev.stages[ev.idx].name} (${ev.stages[ev.idx].km} km).`;
       const lead = rows[0].t;
       let h = '<table class="tb">';
       rows.forEach((r, i) => {
@@ -438,15 +491,24 @@
 
     // ---------- garage ----------
     renderGarage() {
+      const tab = this.gTab || 'cars';
+      $('gTabs').querySelectorAll('button').forEach((b) => b.classList.toggle('on', b.getAttribute('data-tab') === tab));
+      $('tabCars').classList.toggle('hidden', tab !== 'cars');
+      $('tabUps').classList.toggle('hidden', tab !== 'ups');
+      $('tabLivery').classList.toggle('hidden', tab !== 'livery');
+      $('gCred').innerHTML = `<b>${G.save.credits().toLocaleString()}</b> CR`;
       const list = $('carList');
       list.innerHTML = '';
       const stars = this.stars();
       for (const c of G.CARS) {
-        const ok = stars >= c.unlock;
+        const ok = this.carUnlocked(c);
         const lv = this.livery(c.id);
+        const pi = G.perfIndex(c, (G.save.data.ups || {})[c.id]);
         const el = document.createElement('div');
         el.className = 'cr' + (G.save.data.car === c.id ? ' sel' : '') + (ok ? '' : ' lock');
-        el.innerHTML = `<div class="sw" style="background:${lv.primary}"></div><div><b>${c.name}</b><small>${c.cls} · ${c.power} hp · ${c.mass} kg</small></div>${ok ? '' : `<span class="lk">🔒 ${c.unlock} ★</span>`}`;
+        let lock = '';
+        if (!ok) lock = `<span class="lk">🔒 ${c.unlock} ★${c.price ? ` or <button class="sec buy">${c.price.toLocaleString()} CR</button>` : ''}</span>`;
+        el.innerHTML = `<div class="sw" style="background:${lv.primary}"></div><div><b>${c.name}</b><small>${c.cls} · ${c.power} hp · PI ${pi}</small></div>${lock}`;
         if (ok)
           el.onclick = () => {
             G.save.data.car = c.id;
@@ -455,11 +517,30 @@
             this.renderGarage();
             this.app.refreshDemoCar();
           };
+        const bb = el.querySelector('.buy');
+        if (bb) {
+          bb.style.cssText = 'margin:0 0 0 4px;padding:2px 10px;font-size:14px;cursor:pointer;opacity:1';
+          bb.disabled = G.save.credits() < c.price;
+          bb.onclick = (e) => {
+            e.stopPropagation();
+            if (G.save.credits() < c.price) return;
+            G.save.data.spent = (G.save.data.spent | 0) + c.price;
+            G.save.data.owned[c.id] = true;
+            G.save.data.car = c.id;
+            G.save.write();
+            G.NET.pushProfile();
+            G.audio.chime();
+            this.renderGarage();
+            this.app.refreshDemoCar();
+          };
+        }
         list.appendChild(el);
       }
+      void stars;
       const c = G.carById(G.save.data.car);
       const bar = (n, v) => `<div class="sbar"><span>${n}</span><i><u style="width:${(v * 100).toFixed(0)}%"></u></i></div>`;
       $('carInfo').innerHTML = `<div style="margin-bottom:6px">${c.blurb}</div>` + bar('POWER', c.stats.power) + bar('GRIP', c.stats.grip) + bar('WEIGHT', c.stats.weight) + bar('EASE', c.stats.ease);
+      this.renderUpgrades();
       this.renderLivery();
       if (this.returnFromGarage) {
         const back = this.returnFromGarage;
@@ -468,6 +549,41 @@
           $('garage').querySelector('.gfoot .go').onclick = null;
           this.open(back);
         };
+      }
+    },
+    renderUpgrades() {
+      const id = G.save.data.car;
+      const c = G.carById(id);
+      const S = G.save.data;
+      const ups = (S.ups[id] = S.ups[id] || {});
+      $('upInfo').innerHTML = `Upgrades for the <b>${c.name}</b> (PI ${G.perfIndex(c, ups)}). Stock tyres slide on loose surfaces: fit the right compound for each stage.`;
+      const box = $('upList');
+      box.innerHTML = '';
+      for (const p of G.PARTS) {
+        const lvl = ups[p.id] | 0;
+        const cost = lvl < 3 ? p.costs[lvl] : 0;
+        const row = document.createElement('div');
+        row.className = 'up';
+        const pips = [0, 1, 2].map((i) => `<i class="${i < lvl ? 'on' : ''}"></i>`).join('');
+        const now = lvl ? p.desc(lvl) : 'stock';
+        const next = lvl < 3 ? ' → ' + p.desc(lvl + 1) : '';
+        row.innerHTML = `<div class="ic">${p.icon}</div><div><b>${p.name}</b><small>${now}${next}</small><div class="pips">${pips}</div></div>`;
+        const b = document.createElement('button');
+        b.className = lvl < 3 ? 'go' : 'sec';
+        b.style.cssText = 'font-size:15px;padding:6px 12px;letter-spacing:1px';
+        b.textContent = lvl < 3 ? cost.toLocaleString() + ' CR' : 'MAXED';
+        b.disabled = lvl >= 3 || G.save.credits() < cost;
+        b.onclick = () => {
+          if (lvl >= 3 || G.save.credits() < cost) return;
+          S.spent = (S.spent | 0) + cost;
+          ups[p.id] = lvl + 1;
+          G.save.write();
+          G.NET.pushProfile();
+          G.audio.chime();
+          this.renderGarage();
+        };
+        row.appendChild(b);
+        box.appendChild(row);
       }
     },
     renderLivery() {
@@ -573,7 +689,91 @@
       box.appendChild(this.seg('Speed units', 'units', S, [['kmh', 'KM/H'], ['mph', 'MPH']], live));
     },
 
+    // ---------- leaderboards ----------
+    boardStages() {
+      const list = G.FEATURED.map((f) => ({ id: f.id, name: f.name, sub: `${G.THEMES[f.theme].name} · ${f.km} km`, stage: this.featuredStage(f), mode: 'featured' }));
+      const d = this.dailyStage();
+      list.push({ id: 'daily', name: 'Daily Stage', sub: `${G.THEMES[d.theme].name} · today`, stage: d, mode: 'daily' });
+      return list;
+    },
+    renderBoards() {
+      const list = this.boardStages();
+      if (!this.boardSel) this.boardSel = list[0].id;
+      const bl = $('bList');
+      bl.innerHTML = '';
+      for (const b of list) {
+        const el = document.createElement('button');
+        el.className = this.boardSel === b.id ? 'on' : '';
+        el.innerHTML = `${esc(b.name)}<small>${esc(b.sub)}</small>`;
+        el.onclick = () => { this.boardSel = b.id; G.audio.click(); this.renderBoards(); };
+        bl.appendChild(el);
+      }
+      const cur = list.find((b) => b.id === this.boardSel);
+      this.boardCur = cur;
+      this.drawBoard($('bTable'), this.trackKey(cur.stage), cur);
+    },
+    drawBoard(box, key, cur, myTime) {
+      box.innerHTML = '<div class="sub">Loading…</div>';
+      G.NET.board(key)
+        .then((rows) => {
+          const me = G.NET.me();
+          if (!rows.length) {
+            box.innerHTML = '<div class="sub">No times yet. Set the first one!</div>';
+            return;
+          }
+          const lead = rows[0].t;
+          let h = '<table class="tb">';
+          rows.slice(0, 50).forEach((r, i) => {
+            const mine = me && r.uid === me.id;
+            const car = G.CARS.find((c) => c.id === r.c);
+            h += `<tr class="${mine ? 'me' : ''}"><td class="p">${i + 1}</td><td>${esc(r.n)}<br><small style="color:var(--dim)">${car ? car.name : ''}${r.pi ? ' · PI ' + r.pi : ''}</small></td><td class="r">${G.fmtTime(r.t)}</td><td class="r" style="color:var(--dim)">${i ? '+' + (r.t - lead).toFixed(2) : ''}</td><td class="r">${cur ? `<button class="gbtn" data-uid="${esc(r.uid)}" data-t="${r.t}" data-n="${esc(r.n)}">👻 RACE</button>` : ''}</td></tr>`;
+          });
+          box.innerHTML = h + '</table>';
+          box.querySelectorAll('.gbtn').forEach((b) => (b.onclick = () => this.raceGhost(cur, b.getAttribute('data-uid'), +b.getAttribute('data-t'), b.getAttribute('data-n'))));
+          void myTime;
+        })
+        .catch(() => {
+          box.innerHTML = G.NET.status === 'norules'
+            ? '<div class="sub">The online leaderboards aren\'t switched on yet. The game owner needs to add the Go Fast Rally database rules (see the README).</div>'
+            : '<div class="sub">Couldn\'t reach the online leaderboards. Check your connection.</div>';
+        });
+    },
+    async raceGhost(cur, uid, t, name) {
+      G.audio.click();
+      let g = null;
+      try {
+        g = await G.NET.ghost(this.trackKey(cur.stage), uid);
+      } catch (e) {
+        g = null;
+      }
+      if (!g || !g.f || !g.f.length) {
+        $('bSub').textContent = `No ghost saved for ${name}. Try another racer.`;
+        return;
+      }
+      g.n = name;
+      this.app.startStage({ mode: cur.mode, featured: cur.mode === 'featured' ? cur.id : undefined, stage: cur.stage, carId: G.save.data.car, livery: this.livery(G.save.data.car), netGhost: g, netGhostT: t });
+    },
+    playBoardStage() {
+      const cur = this.boardCur;
+      if (!cur) return;
+      if (cur.mode === 'daily') this.startDaily();
+      else this.startFeatured(cur.id);
+    },
+
     // ---------- results ----------
+    renderResBoard() {
+      const r = this.lastResult;
+      if (!r || r.endless) return;
+      $('resTabs').querySelectorAll('button').forEach((b) => b.classList.toggle('on', b.getAttribute('data-b') === this.resTab));
+      if (this.resTab === 'world') {
+        if (!G.NET.signedIn()) {
+          $('resBoard').innerHTML = '<div class="sub">Sign in from the main menu to post your times to the world leaderboard.</div>';
+          return;
+        }
+        const cur = { stage: r.cfg.stage, mode: r.cfg.mode, id: r.cfg.featured };
+        this.drawBoard($('resBoard'), r.key, cur);
+      } else $('resBoard').innerHTML = this._fieldHtml || '';
+    },
     showResults(r) {
       this.lastResult = r;
       const st = r.cfg.stage;
@@ -615,12 +815,29 @@
         rows.forEach((x, i) => {
           h += `<tr class="${x.me ? 'me' : ''}"><td class="p">${i + 1}</td><td>${x.name}<br><small style="color:var(--dim)">${x.car}</small></td><td class="r">${G.fmtTime(x.t)}</td><td class="r" style="color:var(--dim)">${i ? '+' + (x.t - lead).toFixed(2) : ''}</td></tr>`;
         });
-        $('resBoard').innerHTML = h + '</table>';
+        this._fieldHtml = h + '</table>';
         $('resNext').textContent = r.cfg.mode === 'event' ? 'STANDINGS' : r.cfg.mode === 'daily' ? 'MENU' : 'NEXT STAGE';
         $('resNext').onclick = () => this.next();
         $('resRetry').classList.toggle('hidden', r.cfg.mode === 'event');
       }
-      $('resBadges').innerHTML = badges.join('');
+      $('resBadges').innerHTML = badges.join('') + (r.credits ? `<div class="cashline">+${r.credits.toLocaleString()} CR <small>· you have ${G.save.credits().toLocaleString()} CR to spend in the garage</small></div>` : '');
+      this.resTab = !r.endless && r.cfg.mode !== 'event' && G.NET.signedIn() ? 'world' : 'field';
+      $('resTabs').classList.toggle('hidden', !!(r.endless || r.cfg.mode === 'event'));
+      this.renderResBoard();
+      if (r.online) {
+        r.online.then((o) => {
+          if (!o || this.lastResult !== r) return;
+          if (o.rank) {
+            const el = document.createElement('span');
+            el.className = 'badge';
+            el.style.borderColor = '#8fd8ff';
+            el.style.background = 'rgba(143,216,255,.14)';
+            el.textContent = `WORLD #${o.rank} of ${o.total}`;
+            $('resBadges').insertBefore(el, $('resBadges').firstChild);
+          }
+          if (this.resTab === 'world') this.renderResBoard();
+        });
+      }
       const S = G.save.data.settings;
       const sp = (v) => (S.units === 'mph' ? (v * 3.6 * 0.6214).toFixed(0) + ' mph' : (v * 3.6).toFixed(0) + ' km/h');
       $('resStats').innerHTML = `<div class="stat"><small>TOP SPEED</small><b>${sp(r.topSpeed)}</b></div><div class="stat"><small>AVG SPEED</small><b>${sp(r.distance / Math.max(1, r.raw))}</b></div><div class="stat"><small>BIGGEST AIR</small><b>${r.maxAir.toFixed(1)}s</b></div><div class="stat"><small>RESETS</small><b>${r.resets}</b></div>`;

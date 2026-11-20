@@ -78,7 +78,8 @@
       this.track = new G.Track({ seed: st.seed, theme: st.theme, km: st.km, diff: st.diff });
       this.key = this.track.stageKey();
       this.world = new G.World({ scene: app.scene, track: this.track, time: st.time, weather: st.weather, quality: app.quality });
-      this.spec = G.carById(cfg.carId);
+      const ups = this.demo ? {} : (G.save.data.ups || {})[cfg.carId] || {};
+      this.spec = G.tunedSpec(G.carById(cfg.carId), ups);
       const physSettings = this.demo ? { transmission: 'auto', steerAssist: false, abs: true, tc: false, damage: 'off' } : this.settings;
       this.ph = new G.CarPhysics(this.spec, this.world, physSettings);
       this.ph.rainy = !!G.WEATHER[st.weather].rain;
@@ -87,6 +88,7 @@
       this.hint = p.i;
       this.model = new G.CarModel(this.spec, cfg.livery, { night: this.world.night });
       this.ph.bonnetLocal = this.model.bonnetLocal;
+      this.ph.eyeLocal = this.model.eyeLocal;
       app.scene.add(this.model.group);
       this.fx = new G.FX(app.scene, app.quality);
       this.fx.setEnv(this.world, app.camera, app.renderer);
@@ -97,7 +99,9 @@
       // ghost of your best run
       this.best = G.save.data.bests[this.key] || null;
       if (!this.demo && !this.track.endless) {
-        const gd = G.save.ghost(this.key);
+        // a downloaded leaderboard ghost wins over your own best
+        const gd = cfg.netGhost || G.save.ghost(this.key);
+        this.ghostName = cfg.netGhost ? cfg.netGhost.n || 'GHOST' : 'YOUR BEST';
         if (gd && gd.f && gd.f.length) {
           this.ghost = { d: gd, model: new G.CarModel(G.carById(gd.car), null, { ghost: true }) };
           app.scene.add(this.ghost.model.group);
@@ -435,8 +439,35 @@
         this.app.hud.flash('FINISH', 2, '#ffc21a');
         this.app.hud.flashSub(G.fmtTime(total) + (r.newBest ? ' · <span style="color:#3ddc84">NEW BEST</span>' : ''), 3);
       }
+      // credits
+      r.credits = this._payout(r);
+      G.save.earn(r.credits);
       G.save.write();
       this.result = r;
+      // world leaderboard (featured, daily and quick stages)
+      if (!tr.endless && this.cfg.mode !== 'event' && G.NET && G.NET.signedIn()) {
+        const pi = G.perfIndex(G.carById(this.cfg.carId), this.spec.ups);
+        r.online = G.NET.submit(this.key, { t: Math.round(total * 1000) / 1000, c: this.cfg.carId, pi, r: this.resets }, r.newBest ? { car: this.cfg.carId, hz: 10, f: this.ghostRec } : null).catch(() => null);
+      }
+      if (G.NET) G.NET.pushProfile();
+    }
+
+    _payout(r) {
+      const km = r.distance / 1000;
+      if (r.endless) return Math.round(45 * km);
+      let c = 60 * Math.min(km, this.track.km) * [1, 1.25, 1.5, 2][r.medal];
+      if (r.newBest && r.prevBest) c *= 1.3;
+      if (this.cfg.mode === 'daily') c *= 1.5;
+      // first time earning each medal on a stage
+      const b = G.save.data.bests[this.key];
+      const seen = (G.save.data.medalPaid = G.save.data.medalPaid || {});
+      const had = seen[this.key] | 0;
+      if (r.medal > had) {
+        for (let m = had + 1; m <= r.medal; m++) c += [0, 120, 250, 500][m];
+        seen[this.key] = r.medal;
+      }
+      void b;
+      return Math.round(c);
     }
 
     // ----- recording -----
@@ -537,6 +568,8 @@
     _render(dt, idle) {
       const app = this.app, ph = this.ph, tr = this.track, hud = app.hud;
       this.model.update(ph);
+      this.model.setCockpit(!this.demo && app.rig.mode === 2);
+      this.model.animateCockpit(ph, dt);
       if (!idle) this.fx.car(ph, this.model, dt, false);
       this.fx.update(dt);
       // camera
@@ -580,7 +613,8 @@
           const ds = gp.s - this.sCur;
           delta = ds / Math.max(8, ph.speed);
         }
-        const bestTxt = this.best ? 'BEST ' + G.fmtTime(this.best.t) : this.medals ? 'GOLD ' + G.fmtTime(this.medals.gold) : '';
+        let bestTxt = this.best ? 'BEST ' + G.fmtTime(this.best.t) : this.medals ? 'GOLD ' + G.fmtTime(this.medals.gold) : '';
+        if (this.cfg.netGhost) bestTxt = 'VS ' + String(this.ghostName).toUpperCase() + ' · ' + G.fmtTime(this.cfg.netGhostT || 0);
         hud.timer(tot, this.state === 'run' && gp ? delta : null, this.pen, bestTxt);
         const frac = (this.sMax - tr.START) / tr.length;
         hud.progress(frac, gp ? (gp.s - tr.START) / tr.length : null, Math.max(0, (tr.finishS - this.sMax) / 1000).toFixed(2) + ' KM TO GO');
@@ -662,8 +696,14 @@
       }
       this.fx.car(F, this.model, dt * sp, true);
       this.fx.update(dt * sp);
+      this.model.setCockpit(false);
       if (rp.cam === 'tv') app.rig.replay(F.pos, a.s, this.track, this.world, dt);
-      else app.rig.follow(F, this.world, dt, this.settings);
+      else {
+        const m = app.rig.mode;
+        app.rig.mode = 0;
+        app.rig.follow(F, this.world, dt, this.settings);
+        app.rig.mode = m;
+      }
       this.world.update(dt, F.pos.x, F.pos.z, app.camera, F.pos);
       G.audio.update(F, dt, { rain: this.world.wet, snow: this.track.surface === 'snow' });
       app.hud.tick(dt);

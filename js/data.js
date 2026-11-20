@@ -7,14 +7,14 @@
   // tail: fraction of peak grip left when sliding fully, rr: rolling resistance coefficient,
   // dust: how much dust the surface throws, loose: loose (gravel-like) surface.
   G.SURF = {
-    tarmac: { name: 'Tarmac', mu: 1.12, kp: 0.09, ap: 0.13, tail: 0.74, rr: 0.013, dust: 0.05, loose: 0, rough: 0.002, skid: [0.06, 0.06, 0.06, 0.55] },
-    gravel: { name: 'Gravel', mu: 0.9, kp: 0.16, ap: 0.2, tail: 0.88, rr: 0.024, dust: 1, loose: 1, rough: 0.012, skid: [0.28, 0.22, 0.16, 0.45] },
-    dirt: { name: 'Dirt', mu: 0.86, kp: 0.17, ap: 0.21, tail: 0.89, rr: 0.027, dust: 1.25, loose: 1, rough: 0.014, skid: [0.33, 0.16, 0.1, 0.45] },
-    snow: { name: 'Snow', mu: 0.56, kp: 0.2, ap: 0.24, tail: 0.92, rr: 0.03, dust: 0.9, loose: 1, rough: 0.008, skid: [0.72, 0.76, 0.82, 0.5] },
-    ice: { name: 'Ice', mu: 0.3, kp: 0.12, ap: 0.16, tail: 0.85, rr: 0.012, dust: 0.1, loose: 0, rough: 0.002, skid: [0.8, 0.86, 0.92, 0.35] },
+    tarmac: { name: 'Tarmac', mu: 1.06, kp: 0.09, ap: 0.13, tail: 0.74, rr: 0.013, dust: 0.05, loose: 0, rough: 0.002, skid: [0.06, 0.06, 0.06, 0.55] },
+    gravel: { name: 'Gravel', mu: 0.82, kp: 0.16, ap: 0.2, tail: 0.88, rr: 0.024, dust: 1, loose: 1, rough: 0.012, skid: [0.28, 0.22, 0.16, 0.45] },
+    dirt: { name: 'Dirt', mu: 0.79, kp: 0.17, ap: 0.21, tail: 0.89, rr: 0.027, dust: 1.25, loose: 1, rough: 0.014, skid: [0.33, 0.16, 0.1, 0.45] },
+    snow: { name: 'Snow', mu: 0.5, kp: 0.2, ap: 0.24, tail: 0.92, rr: 0.03, dust: 0.9, loose: 1, rough: 0.008, skid: [0.72, 0.76, 0.82, 0.5] },
+    ice: { name: 'Ice', mu: 0.26, kp: 0.12, ap: 0.16, tail: 0.85, rr: 0.012, dust: 0.1, loose: 0, rough: 0.002, skid: [0.8, 0.86, 0.92, 0.35] },
     grass: { name: 'Grass', mu: 0.64, kp: 0.18, ap: 0.23, tail: 0.85, rr: 0.05, dust: 0.35, loose: 1, rough: 0.025, skid: [0.2, 0.25, 0.1, 0.4] },
     sand: { name: 'Sand', mu: 0.62, kp: 0.24, ap: 0.28, tail: 0.92, rr: 0.085, dust: 1.6, loose: 1, rough: 0.02, skid: [0.5, 0.3, 0.18, 0.45] },
-    snowdeep: { name: 'Deep snow', mu: 0.45, kp: 0.25, ap: 0.3, tail: 0.92, rr: 0.11, dust: 1.4, loose: 1, rough: 0.015, skid: [0.8, 0.84, 0.9, 0.45] },
+    snowdeep: { name: 'Deep snow', mu: 0.4, kp: 0.25, ap: 0.3, tail: 0.92, rr: 0.11, dust: 1.4, loose: 1, rough: 0.015, skid: [0.8, 0.84, 0.9, 0.45] },
     rock: { name: 'Rock', mu: 0.8, kp: 0.12, ap: 0.17, tail: 0.8, rr: 0.03, dust: 0.3, loose: 0, rough: 0.03, skid: [0.2, 0.2, 0.2, 0.4] },
   };
   // Grip multipliers when it rains.
@@ -196,6 +196,56 @@
       stats: { power: 1.0, grip: 0.8, weight: 0.4, ease: 0.25 },
     },
   ];
+  // which tyre compound covers which surface
+  G.TYRE_GROUP = { gravel: 'gravel', dirt: 'gravel', grass: 'gravel', sand: 'gravel', rock: 'gravel', snow: 'snow', snowdeep: 'snow', ice: 'snow', tarmac: 'tarmac' };
+
+  // Upgrades: every car has its own levels (0 = stock .. 3). Costs are in credits (CR).
+  G.PARTS = [
+    { id: 'engine', name: 'Engine', icon: '⚙', costs: [450, 1100, 2400], desc: (l) => `+${l * 7}% torque` },
+    { id: 'turbo', name: 'Turbo & intake', icon: '🌀', costs: [400, 950, 2000], desc: (l) => `+${l * 4}% top-end power, ${l * 22}% less turbo lag` },
+    { id: 'gearbox', name: 'Gearbox', icon: '⛭', costs: [350, 800, 1700], desc: (l) => `shifts ${[120, 95, 75, 55][l]} ms, shorter final drive` },
+    { id: 'brakes', name: 'Brakes', icon: '◎', costs: [300, 700, 1500], desc: (l) => `+${l * 12}% stopping power` },
+    { id: 'suspension', name: 'Suspension', icon: '⇕', costs: [400, 900, 1900], desc: (l) => `+${l * 2} cm travel, firmer damping, less roll` },
+    { id: 'weight', name: 'Weight reduction', icon: '⚖', costs: [500, 1200, 2600], desc: (l) => `−${l * 35} kg` },
+    { id: 'tyre_gravel', name: 'Gravel tyres', icon: '◍', costs: [350, 850, 1800], desc: (l) => `+${l * 6}% grip on gravel, dirt and sand` },
+    { id: 'tyre_snow', name: 'Snow studs', icon: '❄', costs: [350, 850, 1800], desc: (l) => `+${l * 8}% grip on snow and ice` },
+    { id: 'tyre_tarmac', name: 'Tarmac slicks', icon: '●', costs: [350, 850, 1800], desc: (l) => `+${l * 5}% grip on tarmac` },
+  ];
+  G.TYRE_GAIN = { gravel: 0.06, snow: 0.08, tarmac: 0.05 };
+
+  // Build an upgraded copy of a car's spec. ups = {engine: 2, brakes: 1, ...}
+  G.tunedSpec = function (base, ups) {
+    ups = ups || {};
+    const L = (k) => G.clamp(ups[k] | 0, 0, 3);
+    const s = Object.assign({}, base);
+    const eng = 1 + L('engine') * 0.07;
+    const tb = L('turbo');
+    s.torque = base.torque.map(([r, t], i) => [r, t * eng * (1 + tb * 0.04 * (i / (base.torque.length - 1)))]);
+    s.turbo = base.turbo > 0 ? base.turbo * (1 - tb * 0.22) : 0;
+    s.shiftTime = [0.12, 0.095, 0.075, 0.055][L('gearbox')];
+    s.final = base.final * (1 + L('gearbox') * 0.025);
+    s.brake = base.brake * (1 + L('brakes') * 0.12);
+    const su = L('suspension');
+    s.travel = base.travel + su * 0.02;
+    s.damper = base.damper * (1 + su * 0.1);
+    s.spring = base.spring * (1 + su * 0.05);
+    s.arbF = base.arbF * (1 + su * 0.12);
+    s.arbR = base.arbR * (1 + su * 0.12);
+    s.mass = base.mass - L('weight') * 35;
+    s.tyre = { gravel: 1 + L('tyre_gravel') * G.TYRE_GAIN.gravel, snow: 1 + L('tyre_snow') * G.TYRE_GAIN.snow, tarmac: 1 + L('tyre_tarmac') * G.TYRE_GAIN.tarmac };
+    s.ups = Object.assign({}, ups);
+    return s;
+  };
+  // rough performance index for display / leaderboards
+  G.perfIndex = function (base, ups) {
+    const s = G.tunedSpec(base, ups);
+    const peak = Math.max(...s.torque.map((x) => x[1]));
+    const pw = (peak * 0.85 + base.power * 2) / (s.mass + 150);
+    let lv = 0;
+    for (const k in ups || {}) lv += ups[k] | 0;
+    return Math.round(200 + pw * 900 + lv * 9 + base.grip * 60);
+  };
+
   G.carById = (id) => G.CARS.find((c) => c.id === id) || G.CARS[1];
 
   G.LIVERY_PATTERNS = ['stripes', 'split', 'hoop', 'arrow', 'plain'];

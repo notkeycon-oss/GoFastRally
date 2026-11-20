@@ -71,7 +71,9 @@
         brk = Math.min(brk, 0.1);
         thr = Math.max(thr * 0.6, 0.3);
       }
-      if (this.stopping && v < 1) { thr = 0; brk = 1; }
+      // stopped: hold it on the handbrake (holding the brake would select reverse)
+      let hb = 0;
+      if (this.stopping && v < 2) { thr = 0; brk = v < 1 ? 0 : 1; hb = 1; }
       // off line: slow down
       if (q.dist > q.hw) thr *= 0.6;
       // stuck recovery
@@ -80,7 +82,7 @@
       this.out.throttle = thr;
       this.out.brake = brk;
       this.out.steer = steer;
-      this.out.handbrake = 0;
+      this.out.handbrake = hb;
       this.s = s;
       return this.out;
     }

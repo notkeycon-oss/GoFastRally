@@ -12,7 +12,7 @@ A rally game that runs in the browser. The cars look low-poly, but the handling 
 | S / ↓ | Brake. Hold it when stopped to reverse. |
 | A D / ← → | Steer |
 | Space | Handbrake |
-| C | Change camera (chase, far chase, bonnet, bumper, helicopter) |
+| C | Change camera (chase, far chase, cockpit, bonnet, bumper, helicopter) |
 | R | Reset to the road (+5 s) |
 | E / Q | Shift up / down (when the gearbox is set to manual) |
 | Esc / P | Pause |
@@ -39,6 +39,37 @@ A rally game that runs in the browser. The cars look low-poly, but the handling 
 
 Every stage keeps a **ghost** of your best run. After the finish you can **watch a replay** with TV-style cameras.
 
+## Credits, upgrades and cars
+
+- **Earning credits (CR):** every finished stage pays out. Medals pay more, and so do a new personal best, a medal for the first time and the Daily Stage. Rally Events pay a prize for your final place.
+- **Upgrades:** each car has its own upgrades, three levels each, bought in the Garage:
+  - engine, turbo and intake, gearbox, brakes, suspension, weight reduction
+  - three tyre compounds: gravel tyres, snow studs and tarmac slicks
+- **Tyres matter:** stock tyres slide on loose surfaces. Fit the right compound for the stage you're driving.
+- **Unlocking cars:** a locked car unlocks with stars, or you can buy it early with credits.
+- **Performance index (PI):** every car shows a PI number that rises with its upgrades. It also appears on the leaderboards.
+
+## Accounts and world leaderboards
+
+- **Signing in:** sign in from the main menu with a racer name and a 4-digit PIN. It's the same account as Riptide Run, so the same name and PIN work in both games.
+- **What's saved:** credits, upgrades, cars and best times are saved online, so signing in on another device brings them back.
+- **Leaderboards:** your times go to a world leaderboard for every featured stage, the Daily Stage and quick stages.
+  - Use the **Leaderboards** menu, or the **World** tab on the results screen.
+  - Press **👻 RACE** to download someone's ghost and race it.
+
+### One-time database setup
+
+Go Fast Rally uses the Riptide Run Firebase project and keeps its data under `/gfr`. Riptide Run's database rules block any path they don't list, so add the Go Fast Rally block once:
+
+1. Open the Firebase console for the **riptide-run** project and go to **Realtime Database**, then **Rules**.
+2. Inside `"rules": { ... }`, paste the `"gfr": { ... }` block from `firebase-rules-gofastrally.json`. Put it next to the existing entries such as `"names"` and `"players"`.
+3. Replace `YOUR_ADMIN_UID` with your admin UID, the same one used in Riptide Run's rules.
+4. Click **Publish**.
+
+Until then the game still works offline. The Leaderboards screen will say the online leaderboards aren't switched on yet.
+
+The online features need the GitHub Pages version (`https://notkeycon-oss.github.io/GoFastRally/`). The claude.ai preview link can't connect to outside servers.
+
 ## Project layout
 
 ```
@@ -58,6 +89,7 @@ js/input.js       keyboard, gamepad, touch
 js/camera.js      chase/bonnet/bumper/helicopter, replay TV cams, garage orbit
 js/ai.js          autopilot (menu demo, cool-down lap, testing)
 js/hud.js         timer, pace-note cards, speedo, minimap
+js/net.js         accounts (name + PIN), cloud save, world leaderboards, ghosts
 js/session.js     one stage: countdown, timing, splits, ghost, replay, resets
 js/ui.js          menus, garage, settings, results, rally event
 js/main.js        renderer, quality presets, dynamic resolution, main loop
