@@ -80,7 +80,7 @@
       this.world = new G.World({ scene: app.scene, track: this.track, time: st.time, weather: st.weather, quality: app.quality });
       const ups = this.demo ? {} : (G.save.data.ups || {})[cfg.carId] || {};
       this.spec = G.tunedSpec(G.carById(cfg.carId), ups);
-      const physSettings = this.demo ? { transmission: 'auto', steerAssist: false, abs: true, tc: false, damage: 'off' } : this.settings;
+      const physSettings = this.demo ? { transmission: 'auto', steerAssist: false, abs: true, tc: false, damage: 'off', handling: 'arcade' } : this.settings;
       this.ph = new G.CarPhysics(this.spec, this.world, physSettings);
       this.ph.rainy = !!G.WEATHER[st.weather].rain;
       const p = this.track.pointAt(this.track.START - 5.5, this.tmpP);
