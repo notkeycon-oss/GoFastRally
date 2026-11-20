@@ -49,6 +49,11 @@
       const lock = (S.steerLock * Math.PI) / 180;
       const sf = ph.settings.steerAssist !== false ? 1 / (1 + (v * v) / 1100) : 1 / (1 + (v * v) / 2600);
       let steer = G.clamp(delta / (lock * sf), -1, 1);
+      // arcade handling takes a turn rate, not a wheel angle
+      if (ph.settings.handling !== 'sim' && ph.rMax > 0.01) {
+        const kappa = (2 * Math.sin(alpha)) / Ld;
+        steer = G.clamp((Math.max(v, 2) * kappa) / ph.rMax, -1, 1);
+      }
       // target speed from the stage speed limits ahead
       const i0 = Math.floor(s / tr.DS);
       const ab = 6.0 * this.skill * (G.SURF[tr.surface].mu / 0.9);
