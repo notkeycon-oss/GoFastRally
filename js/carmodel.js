@@ -105,6 +105,23 @@
 
   const Y_UP = new THREE.Vector3(0, 1, 0);
 
+  // Merge plain-coloured child meshes of a group (no textures, not basic/emissive) into one.
+  function mergeInto(group, filter, material, shadow) {
+    const parts = [], drop = [];
+    for (const o of group.children) {
+      if (!o.isMesh || o.material.map || o.material.type === 'MeshBasicMaterial' || Array.isArray(o.material) || !filter(o)) continue;
+      o.updateMatrix();
+      parts.push({ g: o.geometry, c: '#' + o.material.color.getHexString(), m: o.matrix.clone() });
+      drop.push(o);
+    }
+    if (parts.length < 2) return;
+    for (const o of drop) group.remove(o);
+    const m = new THREE.Mesh(G.geo.merge(parts), material);
+    m.castShadow = true;
+    if (shadow) m.receiveShadow = false;
+    group.add(m);
+  }
+
   // Remove the top faces of the lower body between the windscreen base (a) and the
   // rear glass base (b), so the cabin is open and the crew can be seen through the glass.
   function openLid(geo, a, b) {
@@ -484,6 +501,15 @@
         this.wheels.push({ outer, spin });
       }
       if (!this.ghost) this._buildCockpit(S, lv, xmid, W, mk, dark, accentMat);
+      // fewer draw calls: merge the static exterior detail and each wheel into single meshes
+      if (!this.ghost) {
+        const keep = new Set([this.bodyMesh, ...this.glass]);
+        mergeInto(this.body, (o) => !keep.has(o) && !o.material.transparent, mk(new THREE.MeshPhongMaterial({ vertexColors: true, shininess: 60, specular: 0x444444 })));
+        for (const w of this.wheels) {
+          mergeInto(w.spin, () => true, mk(new THREE.MeshPhongMaterial({ vertexColors: true, shininess: 50, side: THREE.DoubleSide })), true);
+          mergeInto(w.outer, (o) => o !== w.spin, mk(new THREE.MeshPhongMaterial({ vertexColors: true, shininess: 70 })));
+        }
+      }
       // headlights for night driving
       this.spots = [];
       if (opts.night && !this.ghost) {
@@ -704,6 +730,23 @@
       this._v1 = new THREE.Vector3();
       this._v2 = new THREE.Vector3();
       this.cdT = 0;
+      // merge every static interior part into one mesh (one draw call instead of ~50)
+      const moving = new Set(this.arms.map((a) => a.o));
+      const parts = [], drop = [];
+      for (const o of ck.children) {
+        if (!o.isMesh || moving.has(o) || o.material.map || o.material.type === 'MeshBasicMaterial') continue;
+        o.updateMatrix();
+        parts.push({ g: o.geometry, c: '#' + o.material.color.getHexString(), m: o.matrix.clone() });
+        drop.push(o);
+      }
+      if (parts.length) {
+        const mm = mk(new THREE.MeshLambertMaterial({ vertexColors: true }));
+        ck.add(new THREE.Mesh(G.geo.merge(parts), mm));
+        for (const o of drop) {
+          ck.remove(o);
+          o.geometry.dispose();
+        }
+      }
     }
 
     setCockpit(on) {

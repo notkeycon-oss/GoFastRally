@@ -161,6 +161,7 @@
       shadows: true,
       units: 'kmh',
       transmission: 'auto',
+      handling: 'arcade',
       steerAssist: true,
       abs: true,
       tc: false,

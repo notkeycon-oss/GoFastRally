@@ -229,9 +229,10 @@
       if (assist) {
         // keep the front tyres at their best slip angle: full stick = the most grip you can use
         const fs = G.SURF[wheels[0].surf] || G.SURF.gravel;
-        const muF = fs.mu * S.grip * (S.tyre[G.TYRE_GROUP[wheels[0].surf] || 'gravel'] || 1) * this.weatherGrip;
-        const kin = Math.atan((S.wheelbase * muF * GRAV * 0.95) / Math.max(v * v, 1));
-        const dmax = G.clamp(kin + fs.ap * 0.85, lock * 0.2, lock);
+        const arc = this.settings.handling !== 'sim';
+        const muF = fs.mu * S.grip * (S.tyre[G.TYRE_GROUP[wheels[0].surf] || 'gravel'] || 1) * this.weatherGrip * (arc ? 1.15 : 1);
+        const kin = Math.atan((S.wheelbase * muF * GRAV * (arc ? 1.05 : 0.95)) / Math.max(v * v, 1));
+        const dmax = G.clamp(kin + fs.ap * (arc ? 0.35 : 0.85), lock * 0.22, lock);
         target = inp.steer * dmax;
         this.steerMax = dmax;
       } else target = inp.steer * lock * (1 / (1 + (v * v) / 2600));
@@ -429,7 +430,9 @@
         if (!wh.front) mu *= 1.06; // a touch more rear grip keeps the car stable, like a road-tuned rally car
         mu *= G.clamp(1 - 0.09 * (wh.Fz / Fz0 - 1), 0.72, 1.12);
         const den = Math.max(Math.abs(vLong), 3.5);
-        const sy = vLat / den / Math.tan(sf2.ap);
+        const arcade = this.settings.handling !== 'sim';
+        // arcade: the tyre model only handles drive/braking; sideways grip is done below
+        const sy = arcade ? 0 : vLat / den / Math.tan(sf2.ap);
         const kp = sf2.kp;
         const Fmax = mu * wh.Fz;
         const nsub = 6, h = dt / nsub;
@@ -457,7 +460,19 @@
             wh.slip = sl;
           }
         }
-        const Fx = fxA / nsub, Fy = fyA / nsub;
+        const Fx = fxA / nsub;
+        let Fy = fyA / nsub;
+        if (arcade) {
+          // Arcade grip: stiff and predictable right up to the limit, then a steady slide
+          // (no sudden let-go). Wheelspin/braking uses a little of the sideways grip.
+          let cap = mu * 1.15 * wh.Fz;
+          if (!wh.front && inp.handbrake > 0.3) cap *= 0.42;
+          const use = Math.min(1, Math.abs(Fx) / Math.max(cap, 1));
+          cap *= Math.sqrt(Math.max(0.3, 1 - use * use * 0.7));
+          Fy = G.clamp((-vLat * cap) / 0.75, -cap, cap);
+          wh.slipLat = vLat / Math.max(Math.abs(vLong), 1);
+          wh.slip = Math.hypot(wh.slipLong / kp, Math.abs(vLat) / 1.4);
+        }
         const rr = -sf2.rr * wh.Fz * Math.tanh(vLong / 0.6);
         const Ft = t[4].copy(wf).multiplyScalar(Fx + rr).addScaledVector(wr, Fy);
         this.addForceAt(Ft, wh.cp);

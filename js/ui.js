@@ -665,6 +665,7 @@
       };
       const live = () => this.app.applySettings(true);
       grp('DRIVING');
+      box.appendChild(this.seg('Handling', 'handling', S, [['arcade', 'ARCADE'], ['sim', 'SIM']], live, 'Arcade: grippy and easy to drift. Sim: realistic tyres that let go at the limit'));
       box.appendChild(this.seg('Gearbox', 'transmission', S, [['auto', 'AUTO'], ['manual', 'MANUAL (E / Q)']], live));
       box.appendChild(this.seg('Steering assist', 'steerAssist', S, [[true, 'ON'], [false, 'OFF']], live, 'Keeps the front tyres at their grip limit and stops spins'));
       box.appendChild(this.slider('Steering speed', 'steerSens', S, 0.6, 1.6, 0.1, live, (v) => v.toFixed(1) + '×'));
