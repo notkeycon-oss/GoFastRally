@@ -130,6 +130,7 @@
       }
       const uid = this.takeAuth(j);
       G.save.data.account = { name, id: uid, rt: j.refreshToken };
+      G.save.data.noAuto = false;
       G.save.data.name = name;
       G.save.write();
       if (owner !== uid) {
@@ -145,6 +146,8 @@
       return name;
     },
     signOut() {
+      this.goOffline();
+      G.save.data.noAuto = true;
       G.save.data.account = null;
       G.save.write();
       this.token = null;
@@ -196,6 +199,92 @@
       return Promise.resolve();
     },
 
+    // ----- Riptide Run on the same site: reuse its signed-in racer -----
+    riptideAccount() {
+      try {
+        const cur = localStorage.getItem('rr_cur');
+        if (!cur) return null;
+        const d = JSON.parse(localStorage.getItem('rr_u_' + cur) || 'null');
+        const p = d && d.player;
+        if (p && p.id && String(p.id).length >= 20 && p.rt && p.name) return { name: p.name, id: p.id, rt: p.rt };
+      } catch (e) {
+        /* no riptide save */
+      }
+      return null;
+    },
+    async autoSignIn() {
+      if (this.signedIn() || G.save.data.noAuto) return null;
+      const a = this.riptideAccount();
+      if (!a) return null;
+      G.save.data.account = a;
+      G.save.data.name = a.name;
+      G.save.write();
+      const tk = await this.authToken();
+      if (!tk) return null;
+      await this.pullProfile();
+      await this.pushProfile(true);
+      return a.name;
+    },
+
+    // ----- who's online: shows up in Riptide Run's "Online now" list -----
+    presence(state) {
+      if (!this.signedIn() || this.banned) return;
+      const now = Date.now();
+      if (now - (this._presT || 0) < 20000 && state === this._presS) return;
+      this._presT = now;
+      this._presS = state;
+      this.api('online/' + this.me().id, 'PUT', { n: this.me().name.slice(0, 14), m: 'rally', s: state.slice(0, 12), t: { '.sv': 'timestamp' } }).catch(() => {});
+    },
+    goOffline() {
+      if (!this.signedIn() || !this.token) return;
+      try {
+        fetch(`${ONLINE_DB}/online/${this.me().id}.json?auth=${this.token}`, { method: 'DELETE', keepalive: true });
+      } catch (e) {
+        /* page closing */
+      }
+    },
+
+    // ----- admin gifts, resets and bans (set from the Riptide Run admin panel) -----
+    async pollAdmin() {
+      if (!this.signedIn()) return null;
+      const uid = this.me().id;
+      const S = G.save.data;
+      let changed = null;
+      try {
+        const ban = await this.api('bans/' + uid);
+        const on = !!ban && !ban.moved && (ban === true || !ban.until || ban.until > Date.now());
+        this.banned = on ? ban.reason || 'banned' : null;
+      } catch (e) {
+        /* offline */
+      }
+      try {
+        const a = (await this.api(`${ROOT}/adm/${uid}`)) || {};
+        const before = JSON.stringify([S.admCr, S.admCars, S.admUps]);
+        S.admCr = +a.cr || 0;
+        S.admCars = !!a.cars;
+        S.admUps = !!a.ups;
+        if (a.reset && a.reset > (S.resetSeen || 0)) {
+          S.resetSeen = a.reset;
+          S.earned = 300;
+          S.spent = 0;
+          S.ups = {};
+          S.owned = { sprite: true, vortex: true };
+          S.bests = {};
+          S.medalPaid = {};
+          S.endless = {};
+          S.stats = { km: 0, stages: 0, stars: 0, resets: 0, jumps: 0 };
+          if (!G.carById(S.car) || !['sprite', 'vortex'].includes(S.car)) S.car = 'vortex';
+          changed = 'reset';
+          G.save.write();
+          await this.pushProfile(true);
+        } else if (before !== JSON.stringify([S.admCr, S.admCars, S.admUps])) changed = 'gift';
+        G.save.write();
+      } catch (e) {
+        /* rules not set up or offline */
+      }
+      return changed;
+    },
+
     // ----- leaderboards -----
     async board(stageKey, force) {
       const c = this.boards[stageKey];
@@ -210,7 +299,7 @@
     },
     // returns {rank, improved} or null
     async submit(stageKey, entry, ghost) {
-      if (!this.signedIn()) return null;
+      if (!this.signedIn() || this.banned) return null;
       const uid = this.me().id;
       const path = `${ROOT}/lb/${stageKey}/${uid}`;
       let cur = null;

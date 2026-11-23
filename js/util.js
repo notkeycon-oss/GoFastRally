@@ -195,7 +195,16 @@
   G.save = {
     data: null,
     credits() {
-      return (this.data.earned | 0) - (this.data.spent | 0);
+      return (this.data.earned | 0) - (this.data.spent | 0) + (this.data.admCr | 0);
+    },
+    // upgrade levels for a car (an admin "max upgrades" gift makes everything level 3)
+    ups(carId) {
+      if (this.data.admUps) {
+        const o = {};
+        for (const p of G.PARTS) o[p.id] = 3;
+        return o;
+      }
+      return (this.data.ups || {})[carId] || {};
     },
     earn(n) {
       this.data.earned = (this.data.earned | 0) + Math.round(n);

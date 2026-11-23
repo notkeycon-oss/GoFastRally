@@ -25,6 +25,11 @@
         ".read": true,
         ".write": "auth != null && !(root.child('bans').child(auth.uid).exists() && (!root.child('bans').child(auth.uid).child('until').exists() || root.child('bans').child(auth.uid).child('until').val() === 0 || root.child('bans').child(auth.uid).child('until').val() > now)) && auth.uid === $uid || (auth != null && auth.uid === 'YOUR_ADMIN_UID')"
       }
+    },
+    "adm": {
+      "$uid": {
+        ".read": "auth != null && auth.uid === $uid"
+      }
     }
   }
 }
