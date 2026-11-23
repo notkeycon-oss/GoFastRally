@@ -55,8 +55,22 @@
       this.fpsT = 0;
       requestAnimationFrame((t) => this.loop(t));
       this.bootDemo();
-      // cloud save: pull credits/upgrades from another device
-      if (G.NET.signedIn()) G.NET.pullProfile().then(() => { if (UI.current === 'menu') UI.renderMenu(); });
+      // signed in to Riptide Run on this site? Use the same racer here.
+      G.NET.autoSignIn().then((name) => {
+        if (name) this.hud.toast('SIGNED IN AS ' + name.toUpperCase() + ' (RIPTIDE RUN)', 3);
+        // cloud save: pull credits/upgrades from another device
+        if (G.NET.signedIn() && !name) return G.NET.pullProfile();
+      }).then(() => this.checkAdmin()).catch(() => {});
+      setInterval(() => this.checkAdmin(), 60000);
+      setInterval(() => G.NET.presence(this.state === 'race' ? 'racing' : 'menu'), 5000);
+      window.addEventListener('pagehide', () => G.NET.goOffline());
+    },
+
+    async checkAdmin() {
+      const ch = await G.NET.pollAdmin();
+      if (ch === 'reset' && this.state === 'menu') this.refreshDemoCar();
+      if (UI.current === 'menu') UI.renderMenu();
+      if (UI.current === 'garage') UI.renderGarage();
     },
 
     computeQuality() {

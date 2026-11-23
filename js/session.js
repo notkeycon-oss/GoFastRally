@@ -78,7 +78,7 @@
       this.track = new G.Track({ seed: st.seed, theme: st.theme, km: st.km, diff: st.diff });
       this.key = this.track.stageKey();
       this.world = new G.World({ scene: app.scene, track: this.track, time: st.time, weather: st.weather, quality: app.quality });
-      const ups = this.demo ? {} : (G.save.data.ups || {})[cfg.carId] || {};
+      const ups = this.demo ? {} : G.save.ups(cfg.carId);
       this.spec = G.tunedSpec(G.carById(cfg.carId), ups);
       const physSettings = this.demo ? { transmission: 'auto', steerAssist: false, abs: true, tc: false, damage: 'off', handling: 'arcade' } : this.settings;
       this.ph = new G.CarPhysics(this.spec, this.world, physSettings);

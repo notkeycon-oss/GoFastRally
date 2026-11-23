@@ -58,6 +58,15 @@ Every stage keeps a **ghost** of your best run. After the finish you can **watch
   - Use the **Leaderboards** menu, or the **World** tab on the results screen.
   - Press **👻 RACE** to download someone's ghost and race it.
 
+### Playing from the Riptide Run site
+
+Go Fast Rally is also hosted inside the Riptide Run site at `https://notkeycon-oss.github.io/riptide-run/rally/`. The Riptide Run menu links to it.
+
+- **Sign-in:** if you're signed in to Riptide Run there, Go Fast Rally signs you in with the same racer.
+- **Online list:** you show up in Riptide Run's **Online now** list.
+- **Admin:** the Riptide Run admin panel's **🏁 GO FAST RALLY** tab manages rally racers and rally leaderboards.
+- **Updating the hosted copy:** run `tools/deploy-to-riptide.sh /path/to/riptide-run`, then commit in that repo.
+
 ### One-time database setup
 
 Go Fast Rally uses the Riptide Run Firebase project and keeps its data under `/gfr`. Riptide Run's database rules block any path they don't list, so add the Go Fast Rally block once:

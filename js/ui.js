@@ -84,6 +84,8 @@
       $('gTabs').querySelectorAll('button').forEach((b) => (b.onclick = () => { this.gTab = b.getAttribute('data-tab'); G.audio.click(); this.renderGarage(); }));
       $('resTabs').querySelectorAll('button').forEach((b) => (b.onclick = () => { this.resTab = b.getAttribute('data-b'); this.renderResBoard(); }));
       $('bPlay').onclick = () => this.playBoardStage();
+      // back to Riptide Run (same site when Go Fast Rally lives in its rally/ folder)
+      $('toRiptide').onclick = () => { location.href = /\/rally\/?/.test(location.pathname) ? '../riptide.html' : 'https://notkeycon-oss.github.io/riptide-run/'; };
       $('setDone').onclick = () => {
         G.save.write();
         this.app.applySettings();
@@ -195,7 +197,7 @@
       return { theme: f.theme, seed: f.seed, km: f.km, diff: f.diff, time: f.time, weather: f.weather, name: f.name };
     },
     carUnlocked(c) {
-      return this.stars() >= c.unlock || !!(G.save.data.owned || {})[c.id];
+      return this.stars() >= c.unlock || !!(G.save.data.owned || {})[c.id] || !!G.save.data.admCars;
     },
     livery(id) {
       const c = G.carById(id);
@@ -270,7 +272,7 @@
       const me = G.NET.me();
       const status = G.NET.status === 'norules' ? ' · leaderboards not set up yet' : '';
       $('acct').innerHTML = me
-        ? `<span class="pill">👤 <b>${esc(me.name)}</b>${status}</span><button class="sec" id="mOut">SIGN OUT</button>`
+        ? `<span class="pill">👤 <b>${esc(me.name)}</b>${status}</span><button class="sec" id="mOut">SIGN OUT</button>${G.NET.banned ? '<span class="pill" style="color:#ff6b5e">⛔ BANNED FROM ONLINE</span>' : ''}`
         : `<button class="sec" id="mIn">SIGN IN</button><span style="color:var(--dim);font-size:15px">for world leaderboards and cloud saves</span>`;
       if ($('mOut')) $('mOut').onclick = () => { G.NET.signOut(); this.renderMenu(); };
       if ($('mIn')) $('mIn').onclick = () => this.open('login');
@@ -503,7 +505,7 @@
       for (const c of G.CARS) {
         const ok = this.carUnlocked(c);
         const lv = this.livery(c.id);
-        const pi = G.perfIndex(c, (G.save.data.ups || {})[c.id]);
+        const pi = G.perfIndex(c, G.save.ups(c.id));
         const el = document.createElement('div');
         el.className = 'cr' + (G.save.data.car === c.id ? ' sel' : '') + (ok ? '' : ' lock');
         let lock = '';
@@ -555,7 +557,7 @@
       const id = G.save.data.car;
       const c = G.carById(id);
       const S = G.save.data;
-      const ups = (S.ups[id] = S.ups[id] || {});
+      const ups = S.admUps ? G.save.ups(id) : (S.ups[id] = S.ups[id] || {});
       $('upInfo').innerHTML = `Upgrades for the <b>${c.name}</b> (PI ${G.perfIndex(c, ups)}). Stock tyres slide on loose surfaces: fit the right compound for each stage.`;
       const box = $('upList');
       box.innerHTML = '';
