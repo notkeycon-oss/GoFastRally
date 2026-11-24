@@ -19,6 +19,7 @@ A rally game that runs in the browser. The cars look low-poly, but the handling 
 | T | Restart the stage |
 | M | Mute |
 | F | Show the FPS counter |
+| G | Ghost car: show / faint / hide (also in Settings) |
 
 - **Handling:** the default is **Arcade**: grippy and predictable, with easy handbrake drifts. Switch to **Sim** in Settings for realistic tyres that let go at the limit.
 - **Gamepad:** RT throttle, LT brake, A handbrake, Y reset, X camera, LB/RB gears, START pause.
